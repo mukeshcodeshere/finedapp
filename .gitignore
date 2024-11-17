@@ -27,3 +27,4 @@ yarn-error.log*
 
 # Ignore other files/folders
 *.log
+.vercel
