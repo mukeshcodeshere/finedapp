@@ -8,8 +8,8 @@ venv/
 env/
 .venv/
 
-# SQLite Database
-*.db
+# Environment files
+.env
 
 # Logs
 *.log
