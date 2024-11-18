@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "build": "react-scripts build"
   }
 }
