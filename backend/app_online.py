@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import yfinance as yf
 import pandas as pd
-from sqlalchemy import create_engine, Column, Float, String, Date
+from sqlalchemy import create_engine, Column, Float, String, Date, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -34,29 +34,34 @@ class StockPrice(Base):
     close = Column(Float)
     volume = Column(Float)
 
-# Create tables if not exists
-Base.metadata.create_all(engine)
+# Check if the table exists using the correct public API for Neon Postgres
+if not inspect(engine).has_table('stock_prices'):
+    Base.metadata.create_all(engine)
 
 @app.route('/fetch_stock_data', methods=['POST'])
 def fetch_stock_data():
     # Get ticker from request
     data = request.json
-    ticker = data.get('ticker', 'AAPL').upper()
+    ticker = data.get('ticker', 'AAPL').upper()  # Default to 'AAPL' if no ticker is provided
     
-    # Fetch 1 year of historical data
+    # Define date range for the last year
     end_date = datetime.now()
     start_date = end_date - timedelta(days=365)
     
     try:
+        # Fetch historical stock data from Yahoo Finance
         stock_data = yf.download(ticker, start=start_date, end=end_date)
         
+        if stock_data.empty:
+            return jsonify({"status": "error", "message": "No stock data found for this ticker."})
+
         # Store data in Neon Postgres
         session = Session()
         
         # Remove existing data for this ticker
         session.query(StockPrice).filter_by(ticker=ticker).delete()
         
-        # Insert new data
+        # Insert new data into the database
         for index, row in stock_data.iterrows():
             stock_entry = StockPrice(
                 date=index.date(),
@@ -81,15 +86,16 @@ def fetch_stock_data():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+
 @app.route('/get_stock_data', methods=['GET'])
 def get_stock_data():
     # Get ticker from query parameters
-    ticker = request.args.get('ticker', 'AAPL').upper()
+    ticker = request.args.get('ticker', 'AAPL').upper()  # Default to 'AAPL' if no ticker is provided
     
     session = Session()
     stock_data = session.query(StockPrice).filter_by(ticker=ticker).all()
     
-    # Convert to list of dictionaries
+    # Convert the SQLAlchemy results to a list of dictionaries
     data = [{
         'date': str(entry.date),
         'open': entry.open,
@@ -100,7 +106,8 @@ def get_stock_data():
     } for entry in stock_data]
     
     session.close()
+    
     return jsonify(data)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
